@@ -1,0 +1,6 @@
+{
+  "name": "Convite de Aniversário Evilyn Albuquerque",
+  "description": "Convite de aniversário moderno, clean e interativo de 18 anos da Evilyn Albuquerque com confirmação de presença, contagem regressiva, dicas de presentes e mural de recados.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
