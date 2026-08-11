@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
+import { kv } from "@vercel/kv";
 
 // Unified state interfaces
 export interface RSVP {
@@ -57,57 +56,40 @@ const DEFAULT_MESSAGES: Message[] = [];
 
 const DEFAULT_RSVPS: RSVP[] = [];
 
-const INITIAL_STATE: AppState = {
-  rsvps: DEFAULT_RSVPS,
-  messages: DEFAULT_MESSAGES,
-  gifts: DEFAULT_GIFTS
-};
+const KV_KEY = "evilyn_birthday_state";
 
-// In-memory cache as double fallback in case of transient container disk lockups
-let memoryCache: AppState | null = null;
-
-function loadState(): AppState {
-  if (memoryCache) {
-    return memoryCache;
-  }
-  
+async function loadState(): Promise<AppState> {
   try {
-    if (fs.existsSync(FILE_PATH)) {
-      const data = fs.readFileSync(FILE_PATH, "utf-8");
-      const parsed = JSON.parse(data);
-      // Validate structure matches
-      if (parsed.rsvps && parsed.messages && parsed.gifts) {
-        memoryCache = parsed;
-        return parsed;
-      }
+    const data = await kv.get<AppState>(KV_KEY);
+    if (data && data.rsvps && data.messages && data.gifts) {
+      return data;
     }
   } catch (error) {
-    console.error("Error reading data file, using defaults:", error);
+    console.error("Error reading from Vercel KV, using defaults:", error);
   }
 
   // Fallback and initialize
-  saveState(INITIAL_STATE);
+  await saveState(INITIAL_STATE);
   return INITIAL_STATE;
 }
 
-function saveState(state: AppState) {
-  memoryCache = state;
+async function saveState(state: AppState) {
   try {
-    fs.writeFileSync(FILE_PATH, JSON.stringify(state, null, 2), "utf-8");
+    await kv.set(KV_KEY, state);
   } catch (error) {
-    console.error("Error writing data file:", error);
+    console.error("Error writing to Vercel KV:", error);
   }
 }
 
 export async function GET() {
-  const state = loadState();
+  const state = await loadState();
   return NextResponse.json(state);
 }
 
 export async function POST(req: NextRequest) {
   try {
     const { action, payload } = await req.json();
-    const state = loadState();
+    const state = await loadState();
 
     switch (action) {
       case "rsvp": {
@@ -202,7 +184,7 @@ export async function POST(req: NextRequest) {
 
       case "admin-reset": {
         // Reset to initial state
-        saveState(INITIAL_STATE);
+        await saveState(INITIAL_STATE);
         return NextResponse.json(INITIAL_STATE);
       }
 
@@ -210,7 +192,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
 
-    saveState(state);
+    await saveState(state);
     return NextResponse.json(state);
   } catch (error) {
     console.error("Error in POST API route:", error);
