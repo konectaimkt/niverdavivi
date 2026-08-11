@@ -21,7 +21,7 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [gifts, setGifts] = useState<GiftType[]>([]);
   const [currentTrackUrl, setCurrentTrackUrl] = useState(TRACK_OPTIONS[0].url);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [addressCopied, setAddressCopied] = useState(false);
 
   // Address Details
@@ -55,16 +55,6 @@ export default function Home() {
     setTimeout(() => setAddressCopied(false), 3000);
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-cream-bg text-burgundy-800 space-y-4">
-        <div className="w-12 h-12 border-4 border-burgundy-200 border-t-burgundy-800 rounded-full animate-spin" />
-        <p className="font-serif text-sm tracking-widest uppercase animate-pulse">
-          Carregando Convite Especial...
-        </p>
-      </div>
-    );
-  }
 
   return (
     <main

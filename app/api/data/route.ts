@@ -13,12 +13,15 @@ function getRedis(): Redis {
       throw new Error("REDIS_URL environment variable is not set");
     }
     redisClient = new Redis(url, {
-      maxRetriesPerRequest: 3,
+      maxRetriesPerRequest: 1,
       enableReadyCheck: false,
       lazyConnect: false,
+      connectTimeout: 3000,
+      commandTimeout: 3000,
     });
     redisClient.on("error", (err) => {
       console.error("[Redis] Connection error:", err);
+      redisClient = null; // reset so it reconnects on next request
     });
   }
   return redisClient;
