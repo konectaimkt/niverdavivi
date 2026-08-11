@@ -1,15 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Redis } from "@upstash/redis";
+import Redis from "ioredis";
 
 export const dynamic = "force-dynamic";
 
-// Initialize Redis using Upstash's auto-detection (reads UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN)
-let redis: Redis | null = null;
+// Singleton Redis client using REDIS_URL env var (set by Vercel/Upstash integration)
+let redisClient: Redis | null = null;
+
 function getRedis(): Redis {
-  if (!redis) {
-    redis = Redis.fromEnv();
+  if (!redisClient) {
+    const url = process.env.REDIS_URL;
+    if (!url) {
+      throw new Error("REDIS_URL environment variable is not set");
+    }
+    redisClient = new Redis(url, {
+      maxRetriesPerRequest: 3,
+      enableReadyCheck: false,
+      lazyConnect: false,
+    });
+    redisClient.on("error", (err) => {
+      console.error("[Redis] Connection error:", err);
+    });
   }
-  return redis;
+  return redisClient;
 }
 
 // Unified state interfaces
@@ -67,21 +79,24 @@ const INITIAL_STATE: AppState = {
   gifts: DEFAULT_GIFTS
 };
 
-const KV_KEY = "evilyn_birthday_state_v2";
+const KV_KEY = "evilyn_birthday_state_v3";
 
 async function loadState(): Promise<AppState> {
   try {
     const r = getRedis();
-    const data = await r.get<AppState>(KV_KEY);
-    console.log("[DB] loadState result:", data ? "found" : "not found");
-    if (data && Array.isArray(data.rsvps) && Array.isArray(data.messages) && Array.isArray(data.gifts)) {
-      return data;
+    const raw = await r.get(KV_KEY);
+    console.log("[DB] loadState:", raw ? "found data" : "no data");
+    if (raw) {
+      const parsed = JSON.parse(raw) as AppState;
+      if (Array.isArray(parsed.rsvps) && Array.isArray(parsed.messages) && Array.isArray(parsed.gifts)) {
+        return parsed;
+      }
     }
   } catch (error) {
-    console.error("[DB] Error reading from Redis:", error);
+    console.error("[DB] Error loading state:", error);
   }
 
-  console.log("[DB] Using INITIAL_STATE");
+  console.log("[DB] Initializing with default state");
   await saveState(INITIAL_STATE);
   return INITIAL_STATE;
 }
@@ -89,10 +104,10 @@ async function loadState(): Promise<AppState> {
 async function saveState(state: AppState): Promise<void> {
   try {
     const r = getRedis();
-    await r.set(KV_KEY, state);
-    console.log("[DB] saveState OK, rsvps:", state.rsvps.length, "messages:", state.messages.length);
+    await r.set(KV_KEY, JSON.stringify(state));
+    console.log("[DB] Saved. RSVPs:", state.rsvps.length, "Messages:", state.messages.length);
   } catch (error) {
-    console.error("[DB] Error writing to Redis:", error);
+    console.error("[DB] Error saving state:", error);
     throw error;
   }
 }
@@ -122,7 +137,7 @@ export async function POST(req: NextRequest) {
 
         state.rsvps = [newRsvp, ...state.rsvps];
 
-        // Auto-add to guestbook if confirmed with a message
+        // Auto-add to guestbook if confirmed with message
         if (newRsvp.confirmed && newRsvp.message) {
           const newMessage: Message = {
             id: `msg-${Date.now()}-auto`,
@@ -194,7 +209,7 @@ export async function POST(req: NextRequest) {
     await saveState(state);
     return NextResponse.json(state);
   } catch (error) {
-    console.error("[API] Error in POST:", error);
+    console.error("[API] Error:", error);
     return NextResponse.json({ error: "Internal server error", detail: String(error) }, { status: 500 });
   }
 }
