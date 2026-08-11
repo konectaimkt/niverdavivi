@@ -56,6 +56,12 @@ const DEFAULT_MESSAGES: Message[] = [];
 
 const DEFAULT_RSVPS: RSVP[] = [];
 
+const INITIAL_STATE: AppState = {
+  rsvps: DEFAULT_RSVPS,
+  messages: DEFAULT_MESSAGES,
+  gifts: DEFAULT_GIFTS
+};
+
 const KV_KEY = "evilyn_birthday_state";
 
 async function loadState(): Promise<AppState> {
