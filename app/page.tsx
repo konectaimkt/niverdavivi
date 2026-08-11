@@ -33,7 +33,7 @@ export default function Home() {
   useEffect(() => {
     async function loadData() {
       try {
-        const res = await fetch("/app/api/data");
+        const res = await fetch("/api/data");
         if (res.ok) {
           const data = await res.json();
           setRsvps(data.rsvps || []);
