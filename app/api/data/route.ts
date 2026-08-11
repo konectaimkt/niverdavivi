@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@vercel/kv";
-
-const kv = createClient({
-  url: process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || "",
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || ""
-});
+import { Redis } from "@upstash/redis";
 
 export const dynamic = "force-dynamic";
+
+// Initialize Redis using Upstash's auto-detection (reads UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN)
+let redis: Redis | null = null;
+function getRedis(): Redis {
+  if (!redis) {
+    redis = Redis.fromEnv();
+  }
+  return redis;
+}
 
 // Unified state interfaces
 export interface RSVP {
@@ -41,16 +45,14 @@ interface AppState {
   gifts: Gift[];
 }
 
-const FILE_PATH = "/tmp/evilyn_birthday_data.json";
-
 // Default gifts list
 const DEFAULT_GIFTS: Gift[] = [
   { id: "gift-1", name: "Kit Skincare Facial de Luxo", category: "Beleza & Cuidado", isReserved: false },
-  { id: "gift-2", name: "Bolsa de Ombro/Crossbody Elegante", category: "Acessórios", isReserved: true, reservedBy: "Juliana Santos" },
+  { id: "gift-2", name: "Bolsa de Ombro/Crossbody Elegante", category: "Acessórios", isReserved: false },
   { id: "gift-3", name: "Paleta de Sombras Importada", category: "Maquiagem", isReserved: false },
   { id: "gift-4", name: "Difusor de Aromas Elétrico Ultrassônico", category: "Casa", isReserved: false },
   { id: "gift-5", name: "Perfume Floratta O Boticário", category: "Beleza & Cuidado", isReserved: false },
-  { id: "gift-6", name: "Colar Delicado Ponto de Luz (Prata 925)", category: "Acessórios", isReserved: true, reservedBy: "Tia Cláudia" },
+  { id: "gift-6", name: "Colar Delicado Ponto de Luz (Prata 925)", category: "Acessórios", isReserved: false },
   { id: "gift-7", name: "Óculos de Sol Estilo Gatinho Moderno", category: "Acessórios", isReserved: false },
   { id: "gift-8", name: "Organizador de Maquiagem em Acrílico", category: "Organização", isReserved: false },
   { id: "gift-9", name: "Ring Light de Mesa com Tripé", category: "Tecnologia", isReserved: false },
@@ -59,38 +61,39 @@ const DEFAULT_GIFTS: Gift[] = [
   { id: "gift-12", name: "Kit de Pincéis de Maquiagem Profissionais", category: "Maquiagem", isReserved: false },
 ];
 
-const DEFAULT_MESSAGES: Message[] = [];
-
-const DEFAULT_RSVPS: RSVP[] = [];
-
 const INITIAL_STATE: AppState = {
-  rsvps: DEFAULT_RSVPS,
-  messages: DEFAULT_MESSAGES,
+  rsvps: [],
+  messages: [],
   gifts: DEFAULT_GIFTS
 };
 
-const KV_KEY = "evilyn_birthday_state";
+const KV_KEY = "evilyn_birthday_state_v2";
 
 async function loadState(): Promise<AppState> {
   try {
-    const data = await kv.get<AppState>(KV_KEY);
-    if (data && data.rsvps && data.messages && data.gifts) {
+    const r = getRedis();
+    const data = await r.get<AppState>(KV_KEY);
+    console.log("[DB] loadState result:", data ? "found" : "not found");
+    if (data && Array.isArray(data.rsvps) && Array.isArray(data.messages) && Array.isArray(data.gifts)) {
       return data;
     }
   } catch (error) {
-    console.error("Error reading from Vercel KV, using defaults:", error);
+    console.error("[DB] Error reading from Redis:", error);
   }
 
-  // Fallback and initialize
+  console.log("[DB] Using INITIAL_STATE");
   await saveState(INITIAL_STATE);
   return INITIAL_STATE;
 }
 
-async function saveState(state: AppState) {
+async function saveState(state: AppState): Promise<void> {
   try {
-    await kv.set(KV_KEY, state);
+    const r = getRedis();
+    await r.set(KV_KEY, state);
+    console.log("[DB] saveState OK, rsvps:", state.rsvps.length, "messages:", state.messages.length);
   } catch (error) {
-    console.error("Error writing to Vercel KV:", error);
+    console.error("[DB] Error writing to Redis:", error);
+    throw error;
   }
 }
 
@@ -102,11 +105,11 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const { action, payload } = await req.json();
+    console.log("[API] POST action:", action);
     const state = await loadState();
 
     switch (action) {
       case "rsvp": {
-        // Add new RSVP
         const newRsvp: RSVP = {
           id: `rsvp-${Date.now()}`,
           name: payload.name.trim(),
@@ -119,7 +122,7 @@ export async function POST(req: NextRequest) {
 
         state.rsvps = [newRsvp, ...state.rsvps];
 
-        // If the RSVP is confirmed, and they left a message, optionally auto-add it to the guestbook!
+        // Auto-add to guestbook if confirmed with a message
         if (newRsvp.confirmed && newRsvp.message) {
           const newMessage: Message = {
             id: `msg-${Date.now()}-auto`,
@@ -127,7 +130,6 @@ export async function POST(req: NextRequest) {
             text: newRsvp.message,
             createdAt: new Date().toISOString()
           };
-          // Check if message from this person is already there, if not add
           if (!state.messages.some(m => m.name === newMessage.name && m.text === newMessage.text)) {
             state.messages = [newMessage, ...state.messages];
           }
@@ -136,7 +138,6 @@ export async function POST(req: NextRequest) {
       }
 
       case "message": {
-        // Add manual message to the Guestbook
         const newMessage: Message = {
           id: `msg-${Date.now()}`,
           name: payload.name.trim(),
@@ -148,16 +149,10 @@ export async function POST(req: NextRequest) {
       }
 
       case "reserve-gift": {
-        // Reserve a gift
         const { giftId, name } = payload;
         state.gifts = state.gifts.map(g => {
           if (g.id === giftId) {
-            return {
-              ...g,
-              isReserved: true,
-              reservedBy: name.trim(),
-              reservedAt: new Date().toISOString()
-            };
+            return { ...g, isReserved: true, reservedBy: name.trim(), reservedAt: new Date().toISOString() };
           }
           return g;
         });
@@ -165,16 +160,10 @@ export async function POST(req: NextRequest) {
       }
 
       case "cancel-gift": {
-        // Cancel a gift reservation (e.g. if someone made a mistake)
         const { giftId } = payload;
         state.gifts = state.gifts.map(g => {
           if (g.id === giftId) {
-            return {
-              ...g,
-              isReserved: false,
-              reservedBy: undefined,
-              reservedAt: undefined
-            };
+            return { ...g, isReserved: false, reservedBy: undefined, reservedAt: undefined };
           }
           return g;
         });
@@ -182,21 +171,18 @@ export async function POST(req: NextRequest) {
       }
 
       case "admin-delete-rsvp": {
-        // Admin deletes an RSVP
         const { rsvpId } = payload;
         state.rsvps = state.rsvps.filter(r => r.id !== rsvpId);
         break;
       }
 
       case "admin-delete-message": {
-        // Admin deletes a message
         const { messageId } = payload;
         state.messages = state.messages.filter(m => m.id !== messageId);
         break;
       }
 
       case "admin-reset": {
-        // Reset to initial state
         await saveState(INITIAL_STATE);
         return NextResponse.json(INITIAL_STATE);
       }
@@ -208,7 +194,7 @@ export async function POST(req: NextRequest) {
     await saveState(state);
     return NextResponse.json(state);
   } catch (error) {
-    console.error("Error in POST API route:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    console.error("[API] Error in POST:", error);
+    return NextResponse.json({ error: "Internal server error", detail: String(error) }, { status: 500 });
   }
 }
