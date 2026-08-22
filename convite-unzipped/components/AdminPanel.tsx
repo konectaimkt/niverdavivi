@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Shield, Key, X, Trash2, Users, MessageSquare, Settings, Music, RefreshCw, AlertCircle } from "lucide-react";
 import { RSVP, Message, Gift } from "../app/api/data/route";
@@ -34,13 +34,22 @@ export default function AdminPanel({
   const [activeTab, setActiveTab] = useState<"rsvps" | "messages" | "settings">("rsvps");
   const [customTrackUrl, setCustomTrackUrl] = useState(currentTrackUrl);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("admin") === "true" || urlParams.get("admin") === "1") {
+        setIsOpen(true);
+      }
+    }
+  }, []);
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === "evilyn18") {
+    if (password === "@Mkt.conecta1") {
       setIsAuthenticated(true);
       setError("");
     } else {
-      setError("Senha incorreta. Dica: evilyn18");
+      setError("Senha incorreta.");
     }
   };
 
@@ -113,16 +122,6 @@ export default function AdminPanel({
 
   return (
     <>
-      {/* Small floating lock icon in bottom left footer */}
-      <button
-        id="btn-admin-panel"
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 left-6 z-30 w-10 h-10 rounded-full bg-white/85 hover:bg-white backdrop-blur-sm border border-neutral-200 text-neutral-500 hover:text-burgundy-800 flex items-center justify-center shadow-lg transition-all active:scale-95 cursor-pointer"
-        title="Painel Administrativo"
-      >
-        <Shield className="w-4 h-4" />
-      </button>
-
       {/* Modal dialog */}
       <AnimatePresence>
         {isOpen && (
@@ -163,9 +162,6 @@ export default function AdminPanel({
                     <h3 className="font-serif text-xl font-bold text-neutral-900">
                       Acesso Administrativo
                     </h3>
-                    <p className="text-xs text-neutral-500">
-                      Senha padrão do convite: <code className="bg-neutral-100 px-1 py-0.5 rounded font-bold">evilyn18</code>
-                    </p>
                   </div>
 
                   <div className="space-y-3 max-w-xs mx-auto">
