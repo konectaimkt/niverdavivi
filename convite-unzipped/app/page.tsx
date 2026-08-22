@@ -86,9 +86,9 @@ export default function Home() {
   const [addressCopied, setAddressCopied] = useState(false);
 
   // Address Details
-  const eventAddress = "Rua Xavantes, 1245 Guacuri - Itupeva, SP";
-  const googleMapsUrl = "https://www.google.com/maps/dir/?api=1&destination=Rua+Xavantes,+1245+-+Guacuri,+Itupeva+-+SP";
-  const wazeUrl = "https://waze.com/ul?q=Rua+Xavantes,+1245+-+Guacuri,+Itupeva+-+SP&navigate=yes";
+  const eventAddress = "Chácara Flavini, R. Tamôio, 790 - Guacuri, Itupeva - SP";
+  const googleMapsUrl = "https://www.google.com/maps/dir/?api=1&destination=R.+Tam%C3%B4io,+790+-+Guacuri,+Itupeva+-+SP";
+  const wazeUrl = "https://waze.com/ul?q=R.+Tam%C3%B4io,+790+-+Guacuri,+Itupeva+-+SP&navigate=yes";
 
   // Fetch initial app state on Mount
   useEffect(() => {
@@ -237,7 +237,7 @@ export default function Home() {
             Cronograma do Nosso Dia
           </h2>
           <p className="text-neutral-500 text-sm max-w-md mx-auto">
-            Preparamos um dia completo repleto de atrações, boa comida e muita diversão na chácara. Venha preparado!
+            Preparamos um dia completo repleto de atrações, boa comida e muita diversão na Chácara Flavini. Venha preparado!
           </p>
         </div>
 
@@ -250,10 +250,10 @@ export default function Home() {
           <div className="space-y-2">
             <MapPin className="w-10 h-10 text-burgundy-800 mx-auto" />
             <h2 className="font-serif text-3xl font-bold text-neutral-900">
-              Como Chegar na Chácara
+              Como Chegar na Chácara Flavini
             </h2>
-            <p className="text-neutral-500 text-sm max-w-md mx-auto">
-              A Chácara fica em Itupeva, interior de SP, em um local de fácil acesso. Use os links abaixo para traçar sua rota em tempo real!
+            <p className="text-white/80 text-sm max-w-md mx-auto drop-shadow-md">
+              A Chácara Flavini fica em Itupeva, interior de SP, em um local de fácil acesso. Use os links abaixo para traçar sua rota em tempo real!
             </p>
           </div>
 
